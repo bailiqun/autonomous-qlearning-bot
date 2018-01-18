@@ -4,10 +4,12 @@ import sys
 import json
 import numpy as np
 
+
 def event_reader():
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             sys.exit()
+
 
 class Objects:
     def __init__(self, img_file, screen):
@@ -205,7 +207,6 @@ class QLearning:
             self.A = 0
             # update Q table
         return self.action[self.A]
-        # update prev State
 
     def load_qvalues(self):
         with open('qvalues.json', 'r') as file:
@@ -219,13 +220,10 @@ class QLearning:
 
 
 def game_loop(game):
-
     car_x = 0
-
     ql = game['ql']
     screen = game['screen']
     episode = game['episode']
-
     car = Car('img/car.png', screen)
     lines = Lines('img/line.png', screen)
     barrs = Barriers(screen)
@@ -253,6 +251,18 @@ def game_loop(game):
         # indicate which path is access
         indicator.pose_set(barrs.road['x'] + indicator.width//2, screen.get_height()*0.3)
 
+        # episode
+        font_size = 30
+        string_episode = "episode " + str(episode)
+        font = pygame.font.SysFont("arial", font_size)
+        text_surface = font.render(string_episode, True, (255, 255, 255))
+        screen.blit(text_surface, (screen.get_width()//2 - (len(string_episode)*font_size)//6, screen.get_height() - 50))
+
+        # Paint in Pygame
+        car.paint()
+        barrs.paint()
+        indicator.paint()
+
         # score
         font_size = 80
         score = barrs.score
@@ -265,18 +275,6 @@ def game_loop(game):
         # save Q
         if score == 100:
             ql.save_qvalues()
-
-        # episode
-        font_size = 30
-        string_episode = "episode " + str(episode)
-        font = pygame.font.SysFont("arial", font_size)
-        text_surface = font.render(string_episode, True, (255, 255, 255))
-        screen.blit(text_surface, (screen.get_width()//2 - (len(string_episode)*font_size)//6, screen.get_height() - 50))
-
-        # Paint in Pygame
-        car.paint()
-        barrs.paint()
-        indicator.paint()
 
         # detect collision
         if car.is_collision(barrs.barries):
