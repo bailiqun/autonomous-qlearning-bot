@@ -1,3 +1,6 @@
+#!python
+# -*- coding: utf-8 -*-
+
 import pygame
 import random
 import sys
@@ -90,7 +93,7 @@ class Barriers:
         self.screen = screen
         self.score = 0
         self.resolution = 10
-        # dx, dy 可以通过道路位置中心
+        # 'dx,dy' as state
         self.road = {'x': 0, 'y': 0}
         self.reset()
 
