@@ -1,12 +1,7 @@
-#!python
-# -*- coding: utf-8 -*-
-
 import pygame
 import random
 import sys
-import json
 import numpy as np
-
 
 def event_reader():
     for event in pygame.event.get():
@@ -22,6 +17,11 @@ class Objects:
         self.y = 0
         self.width = self.object.get_width()
         self.height = self.object.get_height()
+
+    def img_center(self):
+        cx = self.x + self.width//2
+        cy = self.y + self.height//2
+        return {'x': cx, 'y': cy}
 
     def img_set(self, path):
         self.object = pygame.image.load(path).convert_alpha()
@@ -59,7 +59,7 @@ class Car(Objects):
             maxy = min(box1[3], box2[3])
             collision = not (minx > maxx or miny > maxy)
             if collision:
-                self.screen.blit(self.boom, (self.x-50, self.y-50))
+                self.screen.blit(self.boom, (self.x + self.width//2, self.y + self.height//2))
                 return True
         return False
 
@@ -93,7 +93,7 @@ class Barriers:
         self.screen = screen
         self.score = 0
         self.resolution = 10
-        # 'dx,dy' as state
+        # dx, dy as state
         self.road = {'x': 0, 'y': 0}
         self.reset()
 
@@ -119,7 +119,8 @@ class Barriers:
         n1, n2, n3 = self.generate_diff_num(0, 2)
         self.barries[0].reset(n1)
         self.barries[1].reset(n2)
-        self.road['x'] = (self.screen.get_width() * n3 // 3)
+        # access lane postion use to caculate state
+        self.road['x'] = (self.screen.get_width() * n3 // 3) + self.screen.get_width()//6
 
     def run(self, speed):
         self.barries[0].y += speed
@@ -164,7 +165,7 @@ class QLearning:
     def __init__(self):
         self.Q = {}
         self.action = ['stay', 'left', 'right']
-        self.reward = {'play': 1, 'dead': -100}
+        self.reward = {'alive': 1, 'lane-center': 10, 'dead': -100}
         self.resolution = 1
         self.lr = 0.7
         self.gamma = 0.9
@@ -193,7 +194,7 @@ class QLearning:
         if game_state == 'playing':
             if S and S_ and A in [0, 1, 2] and (S in self.Q) and (S_ in self.Q):
                 self.Q[S][A] = (1 - self.lr) * self.Q[S][A] + \
-                               self.lr * (self.reward['play'] + self.gamma * np.max(self.Q[S_]))
+                               self.lr * (self.reward['alive'] + self.gamma * np.max(self.Q[S_]))
 
             if random.random() < self.explore_jump_rate:
                 A_ = random.randint(0, 2)
@@ -212,14 +213,18 @@ class QLearning:
         return self.action[self.A]
 
     def load_qvalues(self):
-        with open('qvalues.json', 'r') as file:
-            self.Q = json.loads(file)
-            print('Q-values read in game.')
+        import json
+        try:
+            with open('qvalues.json', 'r+') as json_file:
+                self.Q = json.loads(json_file.readline())
+        except IOError:
+            print("Doesn't has json file, staring learning!")
 
     def save_qvalues(self):
-        with open('qvalues.json', 'w') as file:
-            json.dump(self.Q, file)
-            print('Q-values updated on local file.')
+        import json
+        with open('qvalues.json', 'w') as json_file:
+            json.dump(self.Q, json_file, ensure_ascii=False)
+            json_file.write('\n')
 
 
 def game_loop(game):
@@ -241,18 +246,23 @@ def game_loop(game):
         event_reader()
 
         # Update Q, (dx,dy) input as state.
-        dx = (car.x - barrs.road['x'])
-        dy = (car.y - barrs.road['y'])
-        predict = ql.update((dx, dy), 'playing')
+        car_center_x = car.img_center()['x']
+        car_center_y = car.img_center()['y']
+        dx = (car_center_x - barrs.road['x'])
+        dy = (car_center_y - barrs.road['y'])
+        action = ql.update((dx, dy), 'playing')
 
-        if predict == 'left':
-            car_x = car_x - screen.get_width() // 20
-        elif predict == 'right':
-            car_x = car_x + screen.get_width() // 20
+        if action == 'left':
+            # car move with 20 pixel per time(move step),
+            # the larger move step, the more difficult need to learn.
+            # but for visual effect, we choose smaller one. it is really hard to train.
+            car_x = car_x - 20
+        elif action == 'right':
+            car_x = car_x + 20
         car.pose_set(car_x)
 
         # indicate which path is access
-        indicator.pose_set(barrs.road['x'] + indicator.width//2, screen.get_height()*0.3)
+        indicator.pose_set(barrs.road['x']-indicator.width//2, screen.get_height()*0.3)
 
         # episode
         font_size = 30
@@ -276,7 +286,11 @@ def game_loop(game):
         screen.blit(text_surface, (screen.get_width()//2 - (len(string_score) * font_size)//6, 100))
 
         # save Q
-        if score == 100:
+        if score == 10:
+            ql.save_qvalues()
+        elif score == 50:
+            ql.save_qvalues()
+        elif score == 150:
             ql.save_qvalues()
 
         # detect collision
@@ -288,6 +302,10 @@ def game_loop(game):
         else:
             barrs.run(game['car_speed'])
             lines.run(game['car_speed'])
+
+        # Debug use only, show state
+        # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], 100), (barrs.road['x'], car_center_y), 5)
+        # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], car_center_y), (car_center_x, car_center_y), 5)
 
         # Pygame update
         pygame.display.update()
@@ -318,9 +336,13 @@ if __name__ == "__main__":
     fps = pygame.time.Clock()
     screen = pygame.display.set_mode((game['window_size']['width'], game['window_size']['height']), 0, 32)
     pygame.display.set_caption("Q-Learning")
+
     q = QLearning()
+    q.load_qvalues()
+
     game['screen'] = screen
     game['ql'] = q
+
     while True:
         game_loop(game)
         q.update((None, None), 'dead')
