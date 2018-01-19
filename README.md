@@ -2,7 +2,7 @@
 Autonomous car race game writen by pygame and qlearning.
 ###### pygame写小游戏，Agent自行学习如何获得最高的得分，无人驾驶的一个前戏工程
 
-![image](https://github.com/bailiqun/autonomous-qlearning-bot/blob/master/example.gif)
+![image](https://github.com/bailiqun/autonomous-qlearning-bot/blob/master/img/example.gif)
 
 ### 1 介绍
 让汽车学习怎么避开障碍物属于强化学习（reforcement learning）范畴，可以用马尔科夫链来描述。强化学习中有状态(state)、动作(action)、奖赏(reward)这三个要素。
@@ -21,13 +21,13 @@ Autonomous car race game writen by pygame and qlearning.
 
 ###### 游戏界面
 
-![image](https://github.com/bailiqun/autonomous-qlearning-bot/blob/master/intro.png)
+![image](https://github.com/bailiqun/autonomous-qlearning-bot/blob/master/img/intro.png)
 
 #### 2.1 状态
 
 本游戏状态如下图所示，在程序中以字符串"dx,dy",例如"200,100".则Q矩阵可以表示为字典，Q={"dx,dy":[0, 0, 0]}，状态对应的**动作**分别是['stay','left', 'right']表示机器人动作分别是不动、向左、向右。
 
-![image](https://github.com/bailiqun/autonomous-qlearning-bot/blob/master/qstate.png)
+![image](https://github.com/bailiqun/autonomous-qlearning-bot/blob/master/img/qstate.png)
 
 #### 2.2 动作
 参照 2.1
