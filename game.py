@@ -304,7 +304,7 @@ def game_loop(game):
             lines.run(game['car_speed'])
 
         # Debug use only, show state
-        # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], 100), (barrs.road['x'], car_center_y), 5)
+        # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], barrs.barries[0].y), (barrs.road['x'], car_center_y), 5)
         # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], car_center_y), (car_center_x, car_center_y), 5)
 
         # Pygame update
