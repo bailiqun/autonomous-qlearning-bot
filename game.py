@@ -88,6 +88,7 @@ class Barrier(Objects):
 class Barriers:
     def __init__(self, screen):
         self.barries = []
+        self.access_lane = 0;
         self.barries.append(Barrier('img/b1.png', screen))
         self.barries.append(Barrier('img/b2.png', screen))
         self.screen = screen
@@ -121,6 +122,7 @@ class Barriers:
         self.barries[1].reset(n2)
         # access lane postion use to caculate state
         self.road['x'] = (self.screen.get_width() * n3 // 3) + self.screen.get_width()//6
+        self.access_lane = n3
 
     def run(self, speed):
         self.barries[0].y += speed
@@ -129,8 +131,9 @@ class Barriers:
         self.road['y'] = self.barries[0].y + self.barries[0].height
 
         if self.barries[0].y > self.screen.get_height():
-            self.reset()
             self.score += 1
+            self.reset()
+        return self.access_lane
 
     def paint(self):
         self.barries[0].paint()
@@ -162,23 +165,35 @@ class Lines:
 
 
 class QLearning:
-    def __init__(self):
+    def __init__(self, screen):
+        self.screen = screen
         self.Q = {}
         self.action = ['stay', 'left', 'right']
-        self.reward = {'alive': 1, 'lane-center': 10, 'dead': -100}
-        self.resolution = 1
-        self.lr = 0.7
-        self.gamma = 0.9
+        self.reward = {'alive': 1, 'dead': -500}
+        self.resolution = 100
+        # 学习率
+        self.lr = 0.5
+        # 奖励衰减
+        self.gamma = 0.7
+        # 随机探索
+        self.explore_jump_rate = 0.0001
         self.S = None
         self.A = None
-        self.explore_jump_rate = 0.001
+
 
     def state_map(self, dx, dy):
         if dx == None or dy == None:
             return "0,0"
         return str(dx // self.resolution) + ',' + str(dy // self.resolution)
 
-    def update(self, state, game_state):
+    def center_closer(self, car_state):
+        car_x = car_state['x']
+        lane_x = (2 * car_state['laneOK']+1) * self.screen.get_width() / 6
+        delta = lane_x - car_x
+        cost = -delta/self.screen.get_width()
+        return abs(cost)
+
+    def update(self, state, car_state, game_state):
         # prev state
         S = self.S
         # prev action
@@ -193,8 +208,10 @@ class QLearning:
 
         if game_state == 'playing':
             if S and S_ and A in [0, 1, 2] and (S in self.Q) and (S_ in self.Q):
-                self.Q[S][A] = (1 - self.lr) * self.Q[S][A] + \
-                               self.lr * (self.reward['alive'] + self.gamma * np.max(self.Q[S_]))
+                cost = self.center_closer(car_state)
+                reward = self.reward['alive'] + cost
+                self.Q[S][A] = self.Q[S][A] + \
+                               self.lr * (reward + self.gamma * np.max(self.Q[S_]) - self.Q[S][A])
 
             if random.random() < self.explore_jump_rate:
                 A_ = random.randint(0, 2)
@@ -228,6 +245,7 @@ class QLearning:
 
 
 def game_loop(game):
+    access_lane = 0
     car_x = 0
     ql = game['ql']
     screen = game['screen']
@@ -250,15 +268,17 @@ def game_loop(game):
         car_center_y = car.img_center()['y']
         dx = (car_center_x - barrs.road['x'])
         dy = (car_center_y - barrs.road['y'])
-        action = ql.update((dx, dy), 'playing')
+        action = ql.update((dx, dy),
+                           {'x': car_center_x, 'y': car_center_y, 'laneOK': access_lane},
+                           'playing')
 
         if action == 'left':
             # car move with 20 pixel per time(move step),
             # the larger move step, the more difficult need to learn.
             # but for visual effect, we choose smaller one. it is really hard to train.
-            car_x = car_x - 20
+            car_x = car_x - 10
         elif action == 'right':
-            car_x = car_x + 20
+            car_x = car_x + 10
         car.pose_set(car_x)
 
         # indicate which path is access
@@ -295,17 +315,13 @@ def game_loop(game):
 
         # detect collision
         if car.is_collision(barrs.barries):
-            barrs.run(0)
+            access_lane = barrs.run(0)
             lines.run(0)
             pygame.display.flip()
             return
         else:
-            barrs.run(game['car_speed'])
+            access_lane = barrs.run(game['car_speed'])
             lines.run(game['car_speed'])
-
-        # Debug use only, show state
-        # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], barrs.barries[0].y), (barrs.road['x'], car_center_y), 5)
-        # pygame.draw.line(screen, (255, 0, 0), (barrs.road['x'], car_center_y), (car_center_x, car_center_y), 5)
 
         # Pygame update
         pygame.display.update()
@@ -319,7 +335,7 @@ if __name__ == "__main__":
         # pygame windows size
         'window_size': {'width': 450, 'height': 600},
         # fps
-        'fps': 60,
+        'fps': 120,
         # background color
         'bk_color': (46, 45, 49),
         # pygame screen
@@ -337,7 +353,7 @@ if __name__ == "__main__":
     screen = pygame.display.set_mode((game['window_size']['width'], game['window_size']['height']), 0, 32)
     pygame.display.set_caption("Q-Learning")
 
-    q = QLearning()
+    q = QLearning(screen)
     q.load_qvalues()
 
     game['screen'] = screen
@@ -345,7 +361,7 @@ if __name__ == "__main__":
 
     while True:
         game_loop(game)
-        q.update((None, None), 'dead')
+        q.update((None, None),(None, None), 'dead')
         game['episode'] += 1
         pygame.display.update()
 
