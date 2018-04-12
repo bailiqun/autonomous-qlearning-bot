@@ -208,8 +208,8 @@ class QLearning:
 
         if game_state == 'playing':
             if S and S_ and A in [0, 1, 2] and (S in self.Q) and (S_ in self.Q):
-                cost = self.center_closer(car_state)
-                reward = self.reward['alive'] + cost
+                gain = self.center_closer(car_state)
+                reward = self.reward['alive'] + gain/10
                 self.Q[S][A] = self.Q[S][A] + \
                                self.lr * (reward + self.gamma * np.max(self.Q[S_]) - self.Q[S][A])
 
